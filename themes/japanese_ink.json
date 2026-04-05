@@ -11,5 +11,11 @@
   "road_secondary": "#6A6A6A",
   "road_tertiary": "#909090",
   "road_residential": "#B8B8B8",
-  "road_default": "#909090"
+  "road_default": "#909090",
+  "airport": "#D3CDC5",
+  "railway": "#607274",
+  "subway_stations": "#ff7f0e",
+  "runway": "#B26A6A",
+  "taxiway": "#A4B494",
+  "subway": "#1f77b4"
 }
