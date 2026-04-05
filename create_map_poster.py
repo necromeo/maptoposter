@@ -527,7 +527,7 @@ def create_poster(
 
     # Progress bar for data fetching
     with tqdm(
-        total=9,
+        total=10,
         desc="Fetching map data",
         unit="step",
         bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}",
@@ -637,6 +637,15 @@ def create_poster(
         )
         pbar.update(1)
 
+        # TODO this should be made optional
+        pbar.set_description("Downloading buildings")
+        buildings = fetch_features(
+            point,
+            tags={"building": True},
+            dist=dist,
+            name="buildings",
+        )
+
     print("✓ All data retrieved successfully!")
 
     # 2. Setup Plot
@@ -709,6 +718,9 @@ def create_poster(
     if runways is not None and not runways.empty:
         runways = runways.to_crs(g_proj.graph["crs"])
         runways.plot(ax=ax, color=THEME["runway"], linewidth=1.0, zorder=0.4)
+    if buildings is not None and not buildings.empty:
+        buildings = buildings.to_crs(g_proj.graph["crs"])
+        buildings.plot(ax=ax, color=THEME["buildings"], linewidth=1.0, zorder=0.4)
 
     # Layer 2: Roads with hierarchy coloring
     print("Applying road hierarchy colors...")
