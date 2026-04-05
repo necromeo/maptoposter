@@ -496,6 +496,7 @@ def create_poster(
     display_city=None,
     display_country=None,
     fonts=None,
+    fetch_buildings: bool = False,
 ):
     """
     Generate a complete map poster with roads, water, parks, and typography.
@@ -525,9 +526,13 @@ def create_poster(
 
     print(f"\nGenerating map for {city}, {country}...")
 
+    total = 9
+    if fetch_buildings:
+        total += 1
+
     # Progress bar for data fetching
     with tqdm(
-        total=10,
+        total=total,
         desc="Fetching map data",
         unit="step",
         bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}",
@@ -637,14 +642,14 @@ def create_poster(
         )
         pbar.update(1)
 
-        # TODO this should be made optional
-        pbar.set_description("Downloading buildings")
-        buildings = fetch_features(
-            point,
-            tags={"building": True},
-            dist=dist,
-            name="buildings",
-        )
+        if fetch_buildings:
+            pbar.set_description("Downloading buildings")
+            buildings = fetch_features(
+                point,
+                tags={"building": True},
+                dist=dist,
+                name="buildings",
+            )
 
     print("✓ All data retrieved successfully!")
 
@@ -718,9 +723,10 @@ def create_poster(
     if runways is not None and not runways.empty:
         runways = runways.to_crs(g_proj.graph["crs"])
         runways.plot(ax=ax, color=THEME["runway"], linewidth=1.0, zorder=0.4)
-    if buildings is not None and not buildings.empty:
-        buildings = buildings.to_crs(g_proj.graph["crs"])
-        buildings.plot(ax=ax, color=THEME["buildings"], linewidth=1.0, zorder=0.4)
+    if fetch_buildings:
+        if buildings is not None and not buildings.empty:
+            buildings = buildings.to_crs(g_proj.graph["crs"])
+            buildings.plot(ax=ax, color=THEME["buildings"], linewidth=1.0, zorder=0.4)
 
     # Layer 2: Roads with hierarchy coloring
     print("Applying road hierarchy colors...")
@@ -1062,7 +1068,13 @@ Examples:
         help="Image height in inches (default: 16, max: 20)",
     )
     parser.add_argument(
-        "--list-themes", action="store_true", help="List all available themes"
+        "--buildings",
+        "-B",
+        action="store_true",
+        help="Display buildings",
+    )
+    parser.add_argument(
+        "--list-themes", action="store_true", help="List all available themes",
     )
     parser.add_argument(
         "--display-city",
@@ -1170,6 +1182,7 @@ Examples:
                 display_city=args.display_city,
                 display_country=args.display_country,
                 fonts=custom_fonts,
+                fetch_buildings=args.buildings,
             )
 
         print("\n" + "=" * 50)
