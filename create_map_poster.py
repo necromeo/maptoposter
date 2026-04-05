@@ -1096,16 +1096,16 @@ Examples:
         sys.exit(1)
 
     # Enforce maximum dimensions
-    if args.width > 20:
+    if args.width > 36:
         print(
-            f"⚠ Width {args.width} exceeds the maximum allowed limit of 20. It's enforced as max limit 20."
+            f"⚠ Width {args.width} exceeds the maximum allowed limit of 36. It's enforced as max limit 36."
         )
-        args.width = 20.0
-    if args.height > 20:
+        args.width = 36.0
+    if args.height > 24:
         print(
-            f"⚠ Height {args.height} exceeds the maximum allowed limit of 20. It's enforced as max limit 20."
+            f"⚠ Height {args.height} exceeds the maximum allowed limit of 24. It's enforced as max limit 24."
         )
-        args.height = 20.0
+        args.height = 24.0
 
     available_themes = get_available_themes()
     if not available_themes:
