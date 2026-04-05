@@ -183,6 +183,7 @@ def load_theme(theme_name="terracotta"):
     if not os.path.exists(theme_file):
         print(f"⚠ Theme file '{theme_file}' not found. Using default terracotta theme.")
         # Fallback to embedded terracotta theme
+        # TODO add new features
         return {
             "name": "Terracotta",
             "description": "Mediterranean warmth - burnt orange and clay tones on cream",
@@ -261,11 +262,11 @@ def get_edge_colors_by_type(g):
 
     for _u, _v, data in g.edges(data=True):
         # Get the highway type (can be a list or string)
-        highway = data.get('highway', 'unclassified')
+        highway = data.get("highway", "unclassified")
 
         # Handle list of highway types (take the first one)
         if isinstance(highway, list):
-            highway = highway[0] if highway else 'unclassified'
+            highway = highway[0] if highway else "unclassified"
 
         # Assign color based on road type
         if highway in ["motorway", "motorway_link"]:
@@ -279,7 +280,7 @@ def get_edge_colors_by_type(g):
         elif highway in ["residential", "living_street", "unclassified"]:
             color = THEME["road_residential"]
         else:
-            color = THEME['road_default']
+            color = THEME["road_default"]
 
         edge_colors.append(color)
 
@@ -294,10 +295,10 @@ def get_edge_widths_by_type(g):
     edge_widths = []
 
     for _u, _v, data in g.edges(data=True):
-        highway = data.get('highway', 'unclassified')
+        highway = data.get("highway", "unclassified")
 
         if isinstance(highway, list):
-            highway = highway[0] if highway else 'unclassified'
+            highway = highway[0] if highway else "unclassified"
 
         # Assign width based on road importance
         if highway in ["motorway", "motorway_link"]:
@@ -378,13 +379,9 @@ def get_crop_limits(g_proj, center_lat_lon, fig, dist):
     lat, lon = center_lat_lon
 
     # Project center point into graph CRS
-    center = (
-        ox.projection.project_geometry(
-            Point(lon, lat),
-            crs="EPSG:4326",
-            to_crs=g_proj.graph["crs"]
-        )[0]
-    )
+    center = ox.projection.project_geometry(
+        Point(lon, lat), crs="EPSG:4326", to_crs=g_proj.graph["crs"]
+    )[0]
     center_x, center_y = center.x, center.y
 
     fig_width, fig_height = fig.get_size_inches()
@@ -428,7 +425,13 @@ def fetch_graph(point, dist) -> MultiDiGraph | None:
         return cast(MultiDiGraph, cached)
 
     try:
-        g = ox.graph_from_point(point, dist=dist, dist_type='bbox', network_type='all', truncate_by_edge=True)
+        g = ox.graph_from_point(
+            point,
+            dist=dist,
+            dist_type="bbox",
+            network_type="all",
+            truncate_by_edge=True,
+        )
         # Rate limit between requests
         time.sleep(0.5)
         try:
@@ -524,14 +527,16 @@ def create_poster(
 
     # Progress bar for data fetching
     with tqdm(
-        total=3,
+        total=9,
         desc="Fetching map data",
         unit="step",
         bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}",
     ) as pbar:
         # 1. Fetch Street Network
         pbar.set_description("Downloading street network")
-        compensated_dist = dist * (max(height, width) / min(height, width)) / 4  # To compensate for viewport crop
+        compensated_dist = (
+            dist * (max(height, width) / min(height, width)) / 4
+        )  # To compensate for viewport crop
         g = fetch_graph(point, compensated_dist)
         if g is None:
             raise RuntimeError("Failed to retrieve street network data.")
@@ -557,6 +562,81 @@ def create_poster(
         )
         pbar.update(1)
 
+        # 4. Fetch Railways
+        pbar.set_description("Downloading railways")
+        railways = fetch_features(
+            point,
+            compensated_dist,
+            tags={"railway": "rail"},
+            name="railways",
+        )
+        pbar.update(1)
+
+        # 5. Fetch Subway
+        # TODO put ABOVE roads
+        pbar.set_description("Downloading subways")
+        subways = fetch_features(
+            point,
+            compensated_dist,
+            # tags={"railway": "subway", "electrified": "rail"},
+            tags={
+                "railway": "subway",
+                # "tunnel": "yes",
+                # "electrified": "contact_line;rail",
+            },
+            name="subways",
+        )
+        pbar.update(1)
+
+        # 6. Fetch Subway Stations
+        pbar.set_description("Downloading subway stations")
+        subway_stations = fetch_features(
+            point,
+            compensated_dist,
+            tags={
+                "subway": "station",
+                # "railway": "stop",
+                "subway": "yes",  # noqa: F601
+            },
+            name="subway_stations",
+        )
+        pbar.update(1)
+
+        pbar.set_description("Downloading airports")
+
+        # 7. Fetch Airports
+        airports = fetch_features(
+            point,
+            compensated_dist,
+            tags={
+                "aeroway": "aerodrome",
+                "aerodrome:type": "international",
+                "aerodrome:type": "regional",  # noqa: F601
+            },
+            name="airports",
+        )
+        pbar.update(1)
+
+        # 8. Fetch Taxiways
+        pbar.set_description("Downloading taxiways")
+        taxiways = fetch_features(
+            point,
+            compensated_dist,
+            tags={"aeroway": "taxiway"},
+            name="taxiways",
+        )
+        pbar.update(1)
+
+        # 9. Fetch Runways
+        pbar.set_description("Downloading runways")
+        runways = fetch_features(
+            point,
+            compensated_dist,
+            tags={"aeroway": "runway"},
+            name="runways",
+        )
+        pbar.update(1)
+
     print("✓ All data retrieved successfully!")
 
     # 2. Setup Plot
@@ -578,8 +658,13 @@ def create_poster(
             try:
                 water_polys = ox.projection.project_gdf(water_polys)
             except Exception:
-                water_polys = water_polys.to_crs(g_proj.graph['crs'])
-            water_polys.plot(ax=ax, facecolor=THEME['water'], edgecolor='none', zorder=0.5)
+                water_polys = water_polys.to_crs(g_proj.graph["crs"])
+            water_polys.plot(
+                ax=ax,
+                facecolor=THEME["water"],
+                edgecolor="none",
+                zorder=0.5,
+            )
 
     if parks is not None and not parks.empty:
         # Filter to only polygon/multipolygon geometries to avoid point features showing as dots
@@ -589,8 +674,42 @@ def create_poster(
             try:
                 parks_polys = ox.projection.project_gdf(parks_polys)
             except Exception:
-                parks_polys = parks_polys.to_crs(g_proj.graph['crs'])
-            parks_polys.plot(ax=ax, facecolor=THEME['parks'], edgecolor='none', zorder=0.8)
+                parks_polys = parks_polys.to_crs(g_proj.graph["crs"])
+            parks_polys.plot(
+                ax=ax,
+                facecolor=THEME["parks"],
+                edgecolor="none",
+                zorder=0.8,
+            )
+
+    if railways is not None and not railways.empty:
+        railways = railways.to_crs(g_proj.graph["crs"])
+        railways.plot(ax=ax, color=THEME["railway"], linewidth=0.1, zorder=1.0)
+
+    if subways is not None and not subways.empty:
+        subways = subways.to_crs(g_proj.graph["crs"])
+        subways.plot(ax=ax, color=THEME["subway"], linewidth=2, zorder=1.0)
+
+    if subway_stations is not None and not subway_stations.empty:
+        subway_stations = subway_stations.to_crs(g_proj.graph["crs"])
+        subway_stations.plot(
+            ax=ax,
+            color=THEME["subway_stations"],
+            markersize=2,
+        )
+
+    if airports is not None and not airports.empty:
+        airports = airports.to_crs(g_proj.graph["crs"])
+        airports.plot(ax=ax, color=THEME["airport"], linewidth=0.1, zorder=0.1)
+
+    if taxiways is not None and not taxiways.empty:
+        taxiways = taxiways.to_crs(g_proj.graph["crs"])
+        taxiways.plot(ax=ax, color=THEME["taxiway"], linewidth=0.7, zorder=0.1)
+
+    if runways is not None and not runways.empty:
+        runways = runways.to_crs(g_proj.graph["crs"])
+        runways.plot(ax=ax, color=THEME["runway"], linewidth=1.0, zorder=0.4)
+
     # Layer 2: Roads with hierarchy coloring
     print("Applying road hierarchy colors...")
     edge_colors = get_edge_colors_by_type(g_proj)
@@ -600,7 +719,9 @@ def create_poster(
     crop_xlim, crop_ylim = get_crop_limits(g_proj, point, fig, compensated_dist)
     # Plot the projected graph and then apply the cropped limits
     ox.plot_graph(
-        g_proj, ax=ax, bgcolor=THEME['bg'],
+        g_proj,
+        ax=ax,
+        bgcolor=THEME["bg"],
         node_size=0,
         edge_color=edge_colors,
         edge_linewidth=edge_widths,
@@ -612,8 +733,8 @@ def create_poster(
     ax.set_ylim(crop_ylim)
 
     # Layer 3: Gradients (Top and Bottom)
-    create_gradient_fade(ax, THEME['gradient_color'], location='bottom', zorder=10)
-    create_gradient_fade(ax, THEME['gradient_color'], location='top', zorder=10)
+    create_gradient_fade(ax, THEME["gradient_color"], location="bottom", zorder=10)
+    create_gradient_fade(ax, THEME["gradient_color"], location="top", zorder=10)
 
     # Calculate scale factor based on smaller dimension (reference 12 inches)
     # This ensures text scales properly for both portrait and landscape orientations
@@ -845,8 +966,8 @@ def list_themes():
         try:
             with open(theme_path, "r", encoding=FILE_ENCODING) as f:
                 theme_data = json.load(f)
-                display_name = theme_data.get('name', theme_name)
-                description = theme_data.get('description', '')
+                display_name = theme_data.get("name", theme_name)
+                description = theme_data.get("description", "")
         except (OSError, json.JSONDecodeError):
             display_name = theme_name
             description = ""
