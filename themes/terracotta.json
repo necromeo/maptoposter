@@ -11,5 +11,7 @@
   "road_secondary": "#C9846A",
   "road_tertiary": "#D9A08A",
   "road_residential": "#E5C4B0",
-  "road_default": "#D9A08A"
+  "road_default": "#D9A08A",
+  "border": "#8B4513",
+  "subdivision": "#C9846A"
 }
